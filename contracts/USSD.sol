@@ -13,13 +13,9 @@ import "./interfaces/IUSSDRebalancer.sol";
 import "@uniswap/swap-router-contracts/contracts/interfaces/IV3SwapRouter.sol";
 
 /**
-    @notice USSD: Autonomous on-chain stablecoin
+ *     @notice USSD: Autonomous on-chain stablecoin
  */
-contract USSD is
-    IUSSD,
-    ERC20Upgradeable,
-    AccessControlUpgradeable
-{
+contract USSD is IUSSD, ERC20Upgradeable, AccessControlUpgradeable {
     using SafeERC20Upgradeable for IERC20Upgradeable;
     using AddressUpgradeable for address payable;
 
@@ -28,10 +24,9 @@ contract USSD is
     // allowed to manage collateral, set tresholds and perform management tasks
     bytes32 public constant STABLE_CONTROL_ROLE = keccak256("STABLECONTROL");
 
-    function initialize(
-        string memory name,
-        string memory symbol
-    ) public initializer {
+    //q why not __ERC165_init_unchained()??
+    //q can't it be called by anyone present ?
+    function initialize(string memory name, string memory symbol) public initializer {
         __Context_init_unchained();
         __AccessControl_init_unchained();
         __ERC20_init_unchained(name, symbol);
@@ -47,7 +42,7 @@ contract USSD is
     }
 
     /**
-        @dev restrict calls only by STABLE_CONTROL_ROLE role
+     *     @dev restrict calls only by STABLE_CONTROL_ROLE role
      */
     modifier onlyControl() {
         require(hasRole(STABLE_CONTROL_ROLE, msg.sender), "control only");
@@ -58,13 +53,7 @@ contract USSD is
                                 Events
     //////////////////////////////////////////////////////////////*/
 
-    event Mint(
-        address indexed from,
-        address indexed to,
-        address token,
-        uint256 amountToken,
-        uint256 amountStable
-    );
+    event Mint(address indexed from, address indexed to, address token, uint256 amountToken, uint256 amountStable);
 
     /*//////////////////////////////////////////////////////////////
                           COLLATERAL MANAGEMENT
@@ -72,12 +61,7 @@ contract USSD is
 
     CollateralInfo[] private collateral;
 
-    function collateralList()
-        public
-        view
-        override
-        returns (CollateralInfo[] memory)
-    {
+    function collateralList() public view override returns (CollateralInfo[] memory) {
         return collateral;
     }
 
@@ -107,10 +91,7 @@ contract USSD is
         }
     }
 
-    function swapCollateralIndexes(
-        uint256 _index1,
-        uint256 _index2
-    ) public onlyControl {
+    function swapCollateralIndexes(uint256 _index1, uint256 _index2) public onlyControl {
         // cannot use (a, b) = (b, a) for storage variables
         CollateralInfo memory tmp = collateral[_index1];
         collateral[_index1] = collateral[_index2];
@@ -122,9 +103,8 @@ contract USSD is
         collateral.pop();
     }
 
-    function getCollateralIndex(
-        address _token
-    ) public view returns (uint256 index) {
+    //@audit if incorrect Token is provided, it will return the last collateral index
+    function getCollateralIndex(address _token) public view returns (uint256 index) {
         for (index = 0; index < collateral.length; index++) {
             if (collateral[index].token == _token) {
                 return index;
@@ -132,9 +112,7 @@ contract USSD is
         }
     }
 
-    function hasCollateralMint(
-        address _token
-    ) public view returns (bool present) {
+    function hasCollateralMint(address _token) public view returns (bool present) {
         for (uint256 i = 0; i < collateral.length; i++) {
             if (collateral[i].token == _token && collateral[i].mint) {
                 return true;
@@ -148,18 +126,11 @@ contract USSD is
     //////////////////////////////////////////////////////////////*/
 
     /// Mint specific AMOUNT OF STABLE by giving token
-    function mintForToken(
-        address token,
-        uint256 tokenAmount,
-        address to
-    ) public returns (uint256 stableCoinAmount) {
+    //@audit might get sandwhiched
+    function mintForToken(address token, uint256 tokenAmount, address to) public returns (uint256 stableCoinAmount) {
         require(hasCollateralMint(token), "unsupported token");
 
-        IERC20Upgradeable(token).safeTransferFrom(
-            msg.sender,
-            address(this),
-            tokenAmount
-        );
+        IERC20Upgradeable(token).safeTransferFrom(msg.sender, address(this), tokenAmount);
         stableCoinAmount = calculateMint(token, tokenAmount);
         _mint(to, stableCoinAmount);
 
@@ -167,9 +138,13 @@ contract USSD is
     }
 
     /// @dev Return how much STABLECOIN does user receive for AMOUNT of asset
+    //@audit multiply then divide ig?
+    //8770784087430*1e10 *12000/1e18=1052494090
     function calculateMint(address _token, uint256 _amount) public view returns (uint256 stableCoinAmount) {
-        uint256 assetPrice = collateral[getCollateralIndex(_token)].oracle.getPriceUSD();
-        return (((assetPrice * _amount) / 1e18) * (10 ** decimals())) / (10 ** IERC20MetadataUpgradeable(_token).decimals());
+        uint256 assetPrice = collateral[getCollateralIndex(_token)].oracle.getPriceUSD(); // check this oracle thing -> assuming this gives price of asset in 18 decimal places
+        return
+            (((assetPrice * _amount) / 1e18) * (10 ** decimals()))
+                / (10 ** IERC20MetadataUpgradeable(_token).decimals());
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -179,15 +154,9 @@ contract USSD is
     function collateralFactor() public view override returns (uint256) {
         uint256 totalAssetsUSD = 0;
         for (uint256 i = 0; i < collateral.length; i++) {
-            totalAssetsUSD +=
-                (((IERC20Upgradeable(collateral[i].token).balanceOf(
-                    address(this)
-                ) * 1e18) /
-                    (10 **
-                        IERC20MetadataUpgradeable(collateral[i].token)
-                            .decimals())) *
-                    collateral[i].oracle.getPriceUSD()) /
-                1e18;
+            totalAssetsUSD += (((IERC20Upgradeable(collateral[i].token).balanceOf(address(this)) * 1e18)
+                        / (10 ** IERC20MetadataUpgradeable(collateral[i].token).decimals()))
+                    * collateral[i].oracle.getPriceUSD()) / 1e18;
         }
 
         return (totalAssetsUSD * 1e6) / totalSupply();
@@ -224,25 +193,21 @@ contract USSD is
         uniRouter = IV3SwapRouter(_router);
     }
 
-    function UniV3SwapInput(
-        bytes memory _path,
-        uint256 _sellAmount
-    ) public override onlyBalancer {
-        IV3SwapRouter.ExactInputParams memory params = IV3SwapRouter
-            .ExactInputParams({
-                path: _path,
-                recipient: address(this),
-                //deadline: block.timestamp,
-                amountIn: _sellAmount,
-                amountOutMinimum: 0
-            });
+    //@audit amountOuMinimum is set 0, frontrun attack
+    function UniV3SwapInput(bytes memory _path, uint256 _sellAmount) public override onlyBalancer {
+        IV3SwapRouter.ExactInputParams memory params = IV3SwapRouter.ExactInputParams({
+            path: _path,
+            recipient: address(this),
+            //deadline: block.timestamp,
+            amountIn: _sellAmount,
+            amountOutMinimum: 0
+        });
         uniRouter.exactInput(params);
     }
 
+    //@audit-idea approving evverything can lead to some bad thing
     function approveToRouter(address _token) public {
-        IERC20Upgradeable(_token).approve(
-            address(uniRouter),
-            0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-        );
+        IERC20Upgradeable(_token)
+            .approve(address(uniRouter), 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
     }
 }

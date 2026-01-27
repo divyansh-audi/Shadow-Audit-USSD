@@ -5,14 +5,13 @@ import "../interfaces/IStableOracle.sol";
 
 /// @notice oracle for simulation/test with direct price setting
 contract SimOracle is IStableOracle {
-
     uint256 public price;
 
     constructor(uint256 _price) {
         price = _price;
     }
 
-    function getPriceUSD() override external view returns (uint256) {
+    function getPriceUSD() external view override returns (uint256) {
         return price;
     }
 
