@@ -103,7 +103,7 @@ contract USSD is IUSSD, ERC20Upgradeable, AccessControlUpgradeable {
         collateral.pop();
     }
 
-    //@audit if incorrect Token is provided, it will return the last collateral index
+    //@audit if incorrect Token is provided, it will return the collateralLength as index
     function getCollateralIndex(address _token) public view returns (uint256 index) {
         for (index = 0; index < collateral.length; index++) {
             if (collateral[index].token == _token) {
@@ -126,7 +126,7 @@ contract USSD is IUSSD, ERC20Upgradeable, AccessControlUpgradeable {
     //////////////////////////////////////////////////////////////*/
 
     /// Mint specific AMOUNT OF STABLE by giving token
-    //@audit might get sandwhiched
+    //@audit might get sandwhiched, not easy though 
     function mintForToken(address token, uint256 tokenAmount, address to) public returns (uint256 stableCoinAmount) {
         require(hasCollateralMint(token), "unsupported token");
 
@@ -138,8 +138,7 @@ contract USSD is IUSSD, ERC20Upgradeable, AccessControlUpgradeable {
     }
 
     /// @dev Return how much STABLECOIN does user receive for AMOUNT of asset
-    //@audit multiply then divide ig?
-    //8770784087430*1e10 *12000/1e18=1052494090
+    //@audit multiply then divide ig?No this actually is correct and doesn't matter tbh
     function calculateMint(address _token, uint256 _amount) public view returns (uint256 stableCoinAmount) {
         uint256 assetPrice = collateral[getCollateralIndex(_token)].oracle.getPriceUSD(); // check this oracle thing -> assuming this gives price of asset in 18 decimal places
         return
@@ -170,10 +169,12 @@ contract USSD is IUSSD, ERC20Upgradeable, AccessControlUpgradeable {
         rebalancer = IUSSDRebalancer(_rebalancer);
     }
 
+    //@audit anyone can mint tokens ??
     function mintRebalancer(uint256 amount) public override {
         _mint(address(this), amount);
     }
 
+    //@audit anyone can burn tokens
     function burnRebalancer(uint256 amount) public override {
         _burn(address(this), amount);
     }
@@ -198,7 +199,7 @@ contract USSD is IUSSD, ERC20Upgradeable, AccessControlUpgradeable {
         IV3SwapRouter.ExactInputParams memory params = IV3SwapRouter.ExactInputParams({
             path: _path,
             recipient: address(this),
-            //deadline: block.timestamp,
+            // deadline: block.timestamp,
             amountIn: _sellAmount,
             amountOutMinimum: 0
         });

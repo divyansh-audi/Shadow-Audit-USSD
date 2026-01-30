@@ -68,6 +68,8 @@ contract USSDRebalancer is AccessControlUpgradeable, IUSSDRebalancer {
     }
 
     /// @dev get price estimation to DAI using pool address and uniswap price
+    // @audit this might get frontrun 
+    // @audit price manipulation
     function getOwnValuation() public view returns (uint256 price) {// this will return 1e6 or something like 999996
         (uint160 sqrtPriceX96,,,,,,) = uniPool.slot0();
         if (uniPool.token0() == USSD) {
@@ -123,14 +125,16 @@ contract USSDRebalancer is AccessControlUpgradeable, IUSSDRebalancer {
                 // sell a portion of collateral and exit
                 if (collateral[i].pathsell.length > 0) {
                     uint256 amountBefore = IERC20Upgradeable(baseAsset).balanceOf(USSD);
-                    //@audit if amountToBuyLeftUsd < collateralVal , yes this is zero for that reason 
+                    //@audit if amountToBuyLeftUsd < collateralVal , yes this is zero for that reason , this also computes the incorrect amount of token and must be multiplied by asset decimals 
                     uint256 amountToSellUnits = IERC20Upgradeable(collateral[i].token).balanceOf(USSD)
                         * ((amountToBuyLeftUSD * 1e18 / collateralval) / 1e18) / 1e18;
+                    //@audit need to approve the collateral from USSD to do transactions 
                     IUSSD(USSD).UniV3SwapInput(collateral[i].pathsell, amountToSellUnits);
-                    amountToBuyLeftUSD -= (IERC20Upgradeable(baseAsset).balanceOf(USSD) - amountBefore);
-                    DAItosell += (IERC20Upgradeable(baseAsset).balanceOf(USSD) - amountBefore);
-                } else {
+                    amountToBuyLeftUSD -= (IERC20Upgradeable(baseAsset).balanceOf(USSD) - amountBefore);//q this i am not able to understand
+                    DAItosell += (IERC20Upgradeable(baseAsset).balanceOf(USSD) - amountBefore);// also this is smthing i can't understand 
+                } else {// q why the fuck path sell length will be 0
                     // no need to swap DAI
+                    //@audit this is actually incorrect if the token is not 18 decimal ok but this is dai
                     DAItosell =
                         IERC20Upgradeable(collateral[i].token).balanceOf(USSD) * amountToBuyLeftUSD / collateralval;
                 }
@@ -183,7 +187,6 @@ contract USSDRebalancer is AccessControlUpgradeable, IUSSDRebalancer {
             daibought = IERC20Upgradeable(baseAsset).balanceOf(USSD);
             IUSSD(USSD)
                 .UniV3SwapInput(bytes.concat(abi.encodePacked(uniPool.token0(), hex"0001f4", uniPool.token1())), amount);
-            //@audit it will still bypass if the contract somehow receives 0 dai back due to some flash loan attack or smthing 
             daibought = IERC20Upgradeable(baseAsset).balanceOf(USSD) - daibought; // would revert if not bought
         } else {
             daibought = IERC20Upgradeable(baseAsset).balanceOf(USSD);
@@ -203,7 +206,8 @@ contract USSDRebalancer is AccessControlUpgradeable, IUSSDRebalancer {
 
         CollateralInfo[] memory collateral = IUSSD(USSD).collateralList();
         uint256 portions = 0;
-        uint256 ownval = (getOwnValuation() * 1e18 / 1e6) * IUSSD(USSD).totalSupply() / 1e6; // 1e18 total USSD value
+        
+        uint256 ownval = (getOwnValuation() * 1e18 / 1e6) * IUSSD(USSD).totalSupply() / 1e6; // 1e18 total USSD value in terms of dai
         for (uint256 i = 0; i < collateral.length; i++) {
             uint256 collateralval = IERC20Upgradeable(collateral[i].token).balanceOf(USSD) * 1e18
                 / (10 ** IERC20MetadataUpgradeable(collateral[i].token).decimals()) * collateral[i].oracle.getPriceUSD()

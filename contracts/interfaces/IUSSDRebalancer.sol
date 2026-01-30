@@ -12,7 +12,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 //   - order of pools means the priority by which collateral is sold fo force re-peg
 struct CollateralInfo {
     address token; // address of ERC20 collateral
-    bool mint; // can be used for minting
+    bool mint;  // can be used for minting
     bool redeem; // can be used for redeeming
     IStableOracle oracle; // oracle for getting the price in USD
     bytes pathbuy; // for rebalancing/swapping
@@ -22,13 +22,13 @@ struct CollateralInfo {
 
 interface IUSSDRebalancer {
     function rebalance() external;
-    function getPool() external returns (address pool);
+    function getPool() external returns(address pool);
 }
 
 interface IUSSD is IERC20Upgradeable {
     function mintRebalancer(uint256 amount) external;
     function burnRebalancer(uint256 amount) external;
     function collateralList() external returns (CollateralInfo[] calldata);
-    function collateralFactor() external returns (uint256);
+    function collateralFactor() external returns(uint256);
     function UniV3SwapInput(bytes memory _path, uint256 _sellAmount) external;
 }
